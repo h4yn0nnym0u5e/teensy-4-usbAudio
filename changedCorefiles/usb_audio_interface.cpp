@@ -40,14 +40,15 @@ namespace {
 	
 	//variables used by USBAudioInInterface and AudioOutputUSB ==================
   #if (USB_AUDIO_NO_CHANNELS_12*AUDIO_NUM_SUBFRAMES_PER_POLLING_12) < (USB_AUDIO_NO_CHANNELS_480*AUDIO_NUM_SUBFRAMES_PER_POLLING_480)
-    #define AUDIO_TX_SIZE         AUDIO_RX_SIZE_480
+    #define AUDIO_TX_SIZE         AUDIO_TX_SIZE_480
     #define AUDIO_RX_SIZE         AUDIO_RX_SIZE_480
   #else
-    #define AUDIO_TX_SIZE         AUDIO_RX_SIZE_12
+    #define AUDIO_TX_SIZE         AUDIO_TX_SIZE_12
     #define AUDIO_RX_SIZE         AUDIO_RX_SIZE_12
   #endif
 
-	uint16_t noTransmittedChannels=0;	//depending if usb_high_speed if true this is either USB_AUDIO_MAX_NO_CHANNELS or 2 as fall-back strategy
+	uint16_t noTransmittedChannels=0;	//depending if usb_high_speed is true this is either USB_AUDIO_NO_CHANNELS_480 or USB_AUDIO_NO_CHANNELS_12
+	uint32_t maxRxTxSamples = 0;
 	float audioPollingIntervalSec=0;
 	uint16_t audioPollingIntervaluS =0;
 	uint32_t noSamplesPerPollingInterval=0;
@@ -130,10 +131,13 @@ static void rx_event(transfer_t *t)
 
 static void sync_event(transfer_t *t)
 {
-	const uint32_t noRequestedBytes = feedback_accumulator/0x1000000* USB_AUDIO_NO_CHANNELS_480 * AUDIO_SUBSLOT_SIZE; //float fs = feedback_accumulator/(audioPollingIntervalSec*0x1000000);
-	if(noRequestedBytes>AUDIO_RX_SIZE_480){
+	if(feedback_accumulator > maxRxTxSamples*0x1000000){
+		// Serial.print("usb_audio_interface: sync_event: Exceeded maximum number of requeseted Samples. Requested: ");
+		// Serial.print(((double)feedback_accumulator)/0x1000000,8);
+		// Serial.print(", buffer size: ");
+		// Serial.print(maxRxTxSamples);
 		//maximum amount
-		feedback_accumulator =AUDIO_RX_SIZE_480 *0x1000000/(USB_AUDIO_NO_CHANNELS_480 * AUDIO_SUBSLOT_SIZE);
+		feedback_accumulator =maxRxTxSamples * 0x1000000;
 	}
 	// USB 2.0 Specification, 5.12.4.2 Feedback, pages 73-75
 	//printf("sync %x\n", sync_transfer.status); // too slow, can't print this much
@@ -572,7 +576,7 @@ namespace {
 			//we run out of samples -> slow transmission down
             target--;
 		}
-		else if(sign ==1){
+		else if(sign ==1 && target < maxRxTxSamples){
 			devCounter=0;
 			num_send_one_more++;
 			//we run out of buffer space -> speed transmission down
@@ -620,11 +624,12 @@ namespace {
 		static uint32_t errorAccumulator = 0;                   
 		errorAccumulator+=rem;
 		
-		if (errorAccumulator >= denominator)
+		if (errorAccumulator >= denominator && target < maxRxTxSamples)
 		{
 			errorAccumulator -= denominator;
 			target += 1;
 		}
+		
 		return target;
 	}
 	
@@ -914,12 +919,14 @@ void usb_audio_configure(void)
 	incoming_rx_bIdx=0;
 	transmit_rx_bIdx=0;
 	if (usb_high_speed) {
+		maxRxTxSamples = AUDIO_RX_TX_SIZE_SAMPLES_480;
 		noTransmittedChannels   = USB_AUDIO_NO_CHANNELS_480;
 		audioPollingIntervalSec = AUDIO_POLLING_INTERVAL_480_SEC;
 		audioPollingIntervaluS  = AUDIO_NUM_SUBFRAMES_PER_POLLING_480 * MICROFRAME_US;
 		usb_audio_sync_nbytes   = 4;
 		usb_audio_sync_rshift   = 8;
 	} else {
+		maxRxTxSamples = AUDIO_RX_TX_SIZE_SAMPLES_12;
 		noTransmittedChannels   = USB_AUDIO_NO_CHANNELS_12;
 		audioPollingIntervalSec = AUDIO_POLLING_INTERVAL_12_SEC;
 		audioPollingIntervaluS  = AUDIO_NUM_SUBFRAMES_PER_POLLING_12 * MICROFRAME_US;

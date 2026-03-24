@@ -1083,7 +1083,7 @@ extern const usb_descriptor_list_t usb_descriptor_list[];
 	  #undef BANDWIDTH_BYTES_PER_MSEC_12
     #define USB_AUDIO_NO_CHANNELS_12 ((availBytesPerFrame_12 / ((MAX_SAMPLES_PER_MS+RX_TX_ADD_SAMPLES) * AUDIO_SUBSLOT_SIZE)) & ~1) //& ~1 to ensure that we get an even number of channels
     #if USB_AUDIO_NO_CHANNELS_12 < 2
-      // For AUDIO_SAMPLE_RATE_I > 96kHz and AUDIO_SUBSLOT_SIZE==3, USB_AUDIO_NO_CHANNELS_12 won't be defined and the program won't compile
+      // For AUDIO_SAMPLE_RATE_I >= 176.4kHz and AUDIO_SUBSLOT_SIZE==3, USB_AUDIO_NO_CHANNELS_12 won't be defined and the program won't compile
       #undef USB_AUDIO_NO_CHANNELS_12
     #endif
   #endif
